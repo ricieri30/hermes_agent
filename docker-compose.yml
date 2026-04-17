@@ -37,8 +37,25 @@ services:
     tty: true
 
     # Comando padrão: inicia o gateway
-    # Para CLI interativo, use: docker compose run --rm hermes
     command: ["gateway", "start"]
+
+  dashboard:
+    build:
+      context: ./dashboard
+    image: hermes-dashboard:latest
+    container_name: hermes-dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - HERMES_CONTAINER=hermes-agent
+      - HERMES_ENV_FILE=/hermes_env/.env
+      - DASHBOARD_PORT=3000
+    volumes:
+      # Acesso ao socket docker para controlar o container do hermes (start/stop/logs)
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Mapeia a pasta local onde o .env está na máquina host
+      - .:/hermes_env
 
 volumes:
   hermes_data:

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <title>Hermes Agent Dashboard</title>
+  <!-- Bootstrap 5 (CSS) -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  <style>
+    body { background-color: #121212; padding-top: 2rem; font-family: 'Inter', sans-serif; }
+    .card { background-color: #1e1e1e; border: 1px solid #333; margin-bottom: 20px; }
+    .log-box { 
+      background: #000; color: #0f0; font-family: monospace; 
+      height: 400px; overflow-y: auto; padding: 15px; border-radius: 5px; font-size: 13px;
+    }
+    .status-badge { font-size: 1rem; padding: 10px 15px; }
+    input.form-control { background-color: #2b2b2b; color: #fff; border: 1px solid #444; }
+    input.form-control:focus { background-color: #333; color: #fff; border-color: #0d6efd; box-shadow: none; }
+  </style>
+</head>
+<body>
+<div class="container">
+  
+  <div class="row mb-4 align-items-center">
+    <div class="col-md-6">
+      <h2><i class="bi bi-robot"></i> Hermes Agent</h2>
+    </div>
+    <div class="col-md-6 text-md-end">
+      <span id="badge-status" class="badge bg-secondary status-badge">Carregando...</span>
+      <span id="txt-uptime" class="ms-2 text-muted"></span>
+    </div>
+  </div>
+
+  <div class="row">
+    <!-- Esquerda: Controles e Logs -->
+    <div class="col-lg-7">
+      <div class="card">
+        <div class="card-body">
+          <h5 class="card-title">Controle do Container</h5>
+          <div class="btn-group w-100 mb-3">
+            <button class="btn btn-success" onclick="act('start')"><i class="bi bi-play-fill"></i> Iniciar</button>
+            <button class="btn btn-danger" onclick="act('stop')"><i class="bi bi-stop-fill"></i> Parar</button>
+            <button class="btn btn-warning" onclick="act('restart')"><i class="bi bi-arrow-clockwise"></i> Reiniciar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">Logs (Tempo Real)</h5>
+          <button class="btn btn-sm btn-outline-light" onclick="fetchLogs()"><i class="bi bi-arrow-repeat"></i> Atualizar</button>
+        </div>
+        <div class="card-body p-0">
+          <pre id="logs" class="log-box m-0">Aguardando logs...</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Direita: Configurações de API e Telegram -->
+    <div class="col-lg-5">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="mb-0">Configurações & APIs (.env)</h5>
+        </div>
+        <div class="card-body">
+          <form id="envForm" onsubmit="saveEnv(event)">
+            
+            <h6 class="text-info mt-2">🔌 Modelo Principal</h6>
+            <div class="mb-3">
+              <label>HERMES_MODEL (ex: openrouter:provider/model)</label>
+              <input type="text" class="form-control" name="HERMES_MODEL" placeholder="openrouter:nousresearch/hermes-3-llama-3.1-405b">
+            </div>
+
+            <h6 class="text-primary mt-4">🔑 Chaves de API (Preencha as que for usar)</h6>
+            <div class="mb-2">
+              <label>OPENROUTER_API_KEY (200+ Modelos)</label>
+              <input type="password" class="form-control" name="OPENROUTER_API_KEY" placeholder="sk-or-v1-...">
+            </div>
+            <div class="mb-2">
+              <label>GROQ_API_KEY (Rápido e Gratuito)</label>
+              <input type="password" class="form-control" name="GROQ_API_KEY" placeholder="gsk_...">
+            </div>
+            <div class="mb-3">
+              <label>NOUS_API_KEY (Portal Oficial)</label>
+              <input type="password" class="form-control" name="NOUS_API_KEY" placeholder="nous-...">
+            </div>
+
+            <h6 class="text-success mt-4">💬 Telegram Gateway</h6>
+            <div class="mb-2">
+              <label>TELEGRAM_TOKEN (@BotFather)</label>
+              <input type="password" class="form-control" name="TELEGRAM_TOKEN" placeholder="1234567890:AAH...">
+            </div>
+            <div class="mb-3">
+              <label>TELEGRAM_ALLOWED_IDS (Sua segurança)</label>
+              <input type="text" class="form-control" name="TELEGRAM_ALLOWED_IDS" placeholder="Sua ID do Telegram (Para impedir estranhos de usar seu agente)">
+              <small class="text-muted">Ids separados por vírgula. Ex: 12345,67890</small>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100 mt-3 d-flex justify-content-center align-items-center">
+              <i class="bi bi-save me-2"></i> Salvar Configurações
+              <span id="save-spinner" class="spinner-border spinner-border-sm ms-2 d-none"></span>
+            </button>
+            <div id="save-msg" class="mt-2 text-center text-success" style="display:none;">Salvo com sucesso! Reinicie o agente.</div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const API = '/api';
+
+  async function fetchStatus() {
+    try {
+      const r = await fetch(API+'/status');
+      const data = await r.json();
+      const b = document.getElementById('badge-status');
+      const u = document.getElementById('txt-uptime');
+      
+      if (data.status === 'running') {
+        b.className = 'badge bg-success status-badge';
+        b.innerText = 'Online';
+      } else if (data.status === 'exited') {
+        b.className = 'badge bg-danger status-badge';
+        b.innerText = 'Parado';
+      } else if (data.status === 'not_found') {
+        b.className = 'badge bg-warning text-dark status-badge';
+        b.innerText = 'Não Encontrado';
+      } else {
+        b.className = 'badge bg-secondary status-badge';
+        b.innerText = data.status || 'Desconhecido';
+      }
+      u.innerText = data.uptime ? '('+data.uptime+')' : '';
+    } catch(e) { console.error('Status sync errored'); }
+  }
+
+  async function fetchLogs() {
+    try {
+      const r = await fetch(API+'/logs');
+      const data = await r.json();
+      const logBox = document.getElementById('logs');
+      logBox.innerText = data.logs || 'Sem logs';
+      logBox.scrollTop = logBox.scrollHeight;
+    } catch(e) { console.error('Log sync errored'); }
+  }
+
+  async function fetchEnv() {
+    try {
+      const r = await fetch(API+'/config');
+      const {vars} = await r.json();
+      const form = document.getElementById('envForm');
+      for (let k in vars) {
+        if (form.elements[k]) {
+          form.elements[k].value = vars[k] || '';
+        }
+      }
+    } catch(e) { console.error('Env sync errored'); }
+  }
+
+  async function saveEnv(e) {
+    e.preventDefault();
+    const btn = document.getElementById('save-spinner');
+    const msg = document.getElementById('save-msg');
+    btn.classList.remove('d-none');
+    
+    const formData = new FormData(e.target);
+    const updates = {};
+    formData.forEach((val, key) => { if(val) updates[key] = val; });
+
+    try {
+      await fetch(API+'/config', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(updates)
+      });
+      msg.style.display = 'block';
+      setTimeout(() => msg.style.display = 'none', 3000);
+      fetchEnv(); 
+    } catch(err) {
+      alert('Erro ao salvar');
+    } finally {
+      btn.classList.add('d-none');
+    }
+  }
+
+  async function act(action) {
+    try {
+      await fetch(API+'/'+action, {method: 'POST'});
+      setTimeout(() => {
+        fetchStatus(); fetchLogs();
+      }, 1000);
+    } catch(e){ alert('Erro ao executar '+action); }
+  }
+
+  // Inicializacao e loops
+  fetchEnv();
+  setInterval(fetchStatus, 3000);
+  setInterval(fetchLogs, 5000);
+  fetchStatus();
+  fetchLogs();
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "hermes-dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard leve para gerenciar o Hermes Agent",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "dockerode": "^4.0.2",
+    "dotenv": "^16.4.5"
+  }
+}
