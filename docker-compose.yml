@@ -1,7 +1,7 @@
 services:
   hermes:
     build:
-      context: .
+      context: https://github.com/NousResearch/hermes-agent.git#main
       dockerfile: Dockerfile
     image: hermes-agent:latest
     container_name: hermes-agent
